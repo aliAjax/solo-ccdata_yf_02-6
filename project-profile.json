@@ -1,11 +1,11 @@
 {
   "projectId": "ccdata_yf_02",
-  "projectName": "Canvas Room",
+  "projectName": "离线物料需求计划台",
   "category": "未分类",
-  "businessDomain": "待补充",
+  "businessDomain": "制造业/供应链",
   "projectForm": "完整项目",
   "codeScope": "frontend",
   "languages": ["HTML", "CSS", "JavaScript"],
-  "summary": "Canvas Room collaborative whiteboard demo with notes, text, shapes, lines, member cursors, undo and PNG export.",
+  "summary": "Offline MRP workbench: materials, date-bucketed inventory, finished-goods orders, multi-level BOM with scrap; layer-by-layer gross/net requirements, same-period-only stock allocation, lead-time backward scheduling, validation blocking (missing materials, invalid quantities, duplicate parent-child edges, cycles), localStorage persistence with recompute-on-edit.",
   "containerized": false
 }
