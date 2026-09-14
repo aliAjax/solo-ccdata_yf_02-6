@@ -1,0 +1,16 @@
+{
+  "name": "offline-mrp-workbench",
+  "version": "1.0.0",
+  "private": true,
+  "description": "离线物料需求计划台：多层 BOM 毛/净需求、同日库存竞用、提前期倒排、错误阻断、localStorage 持久化",
+  "scripts": {
+    "test": "npm run test:engine && npm run test:ui && npm run test:mobile",
+    "test:engine": "node test/mrp.test.js",
+    "test:ui": "node test/ui.test.js",
+    "test:mobile": "playwright install chromium >/dev/null 2>&1; node test/mobile.test.js"
+  },
+  "devDependencies": {
+    "jsdom": "^24.1.3",
+    "playwright": "^1.48.2"
+  }
+}

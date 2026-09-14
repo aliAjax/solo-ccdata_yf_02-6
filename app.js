@@ -86,34 +86,18 @@
     return m && m.name ? m.name : '';
   }
 
-  // 把引擎错误按内部行定位，标记需要高亮的行
+  // 把引擎错误精确映射到出错的那一个内部行（targets 携带 kind + 行号），
+  // 同物料的其它有效记录不会被一起标红。
   function buildErrorIndex(errors) {
     var idx = { materials: {}, inventories: {}, orders: {}, boms: {} };
-    function mark(kind, key) { if (key) idx[kind][key] = true; }
     errors.forEach(function (e) {
-      if (e.code === 'DUPLICATE_MATERIAL' || e.code === 'INVALID_LEAD_TIME' || e.code === 'EMPTY_MATERIAL_ID') {
-        mark('materials', e.material);
-      }
-      if (e.code === 'INVALID_QTY') {
-        // 数量错误可能来自库存/订单/BOM，按存在性都标，由消息说明位置
-        state.data.inventories.forEach(function (r) { if (r.material === e.material) mark('inventories', r._id); });
-        state.data.orders.forEach(function (r) { if (r.material === e.material) mark('orders', r._id); });
-        state.data.boms.forEach(function (r) { if (r.parent === e.material || r.child === e.material) mark('boms', r._id); });
-      }
-      if (e.code === 'INVALID_DATE') {
-        state.data.inventories.forEach(function (r) { if (r.material === e.material) mark('inventories', r._id); });
-        state.data.orders.forEach(function (r) { if (r.material === e.material) mark('orders', r._id); });
-      }
-      if (e.code === 'MISSING_MATERIAL') {
-        state.data.inventories.forEach(function (r) { if (r.material === e.material) mark('inventories', r._id); });
-        state.data.orders.forEach(function (r) { if (r.material === e.material) mark('orders', r._id); });
-        state.data.boms.forEach(function (r) { if (r.parent === e.material || r.child === e.material) mark('boms', r._id); });
-      }
-      if (e.code === 'DUPLICATE_BOM' || e.code === 'INVALID_SCRAP' || e.code === 'EMPTY_BOM_NODE') {
-        state.data.boms.forEach(function (r) {
-          if (r.parent === e.material || r.child === e.material) mark('boms', r._id);
-        });
-      }
+      (e.targets || []).forEach(function (t) {
+        var list = state.data[t.kind];
+        var row = list && list[t.index];
+        if (!row) return;
+        var key = t.kind === 'materials' ? row.id : row._id;
+        if (key) idx[t.kind][key] = true;
+      });
     });
     return idx;
   }
@@ -358,6 +342,11 @@
       row[field] = el.value === '' ? '' : Number(el.value);
     } else {
       row[field] = el.value;
+    }
+    // 物料编码本身就是行 key，编辑后同步更新该行所有 data-id，避免轻量刷新期间定位失效
+    if (kind === 'materials' && field === 'id') {
+      var tr = el.closest('tr');
+      if (tr) Array.prototype.forEach.call(tr.querySelectorAll('[data-id]'), function (x) { x.dataset.id = row.id; });
     }
     el.classList.remove('bad');
     commit();

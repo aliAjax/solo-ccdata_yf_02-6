@@ -4,8 +4,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
-const Module = require('module');
-const { JSDOM } = require('/tmp/node_modules/jsdom');
+const { JSDOM } = require('jsdom');
 
 let passed = 0, failed = 0;
 function test(name, fn) {

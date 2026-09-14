@@ -53,8 +53,11 @@
     return typeof v === 'string' ? v.trim() : String(v == null ? '' : v).trim();
   }
 
-  function err(code, material, message, detail) {
-    return { code: code, material: material || '', message: message, detail: detail || '' };
+  function err(code, material, message, detail, target) {
+    // target: { kind: 'materials'|'inventories'|'orders'|'boms', index } 或其数组
+    var targets = null;
+    if (target) targets = Array.isArray(target) ? target : [target];
+    return { code: code, material: material || '', message: message, detail: detail || '', targets: targets };
   }
 
   // ---------- 数据规整 ----------
@@ -91,86 +94,93 @@
 
     // 物料主数据
     var matSet = Object.create(null);
-    data.materials.forEach(function (m) {
+    data.materials.forEach(function (m, mi) {
+      var tm = { kind: 'materials', index: mi };
       if (!m.id) {
-        errors.push(err('EMPTY_MATERIAL_ID', '', '存在编码为空的物料，请补全物料编码。'));
+        errors.push(err('EMPTY_MATERIAL_ID', '', '存在编码为空的物料（物料表第 ' + (mi + 1) + ' 行），请补全物料编码。', '', tm));
       } else if (Object.prototype.hasOwnProperty.call(matSet, m.id)) {
-        errors.push(err('DUPLICATE_MATERIAL', m.id, '物料编码重复：' + m.id + '（每个编码只能出现一次）。'));
+        errors.push(err('DUPLICATE_MATERIAL', m.id,
+          '物料编码重复：' + m.id + '（每个编码只能出现一次）。', '', tm));
       } else {
-        matSet[m.id] = true;
+        matSet[m.id] = mi;
       }
       if (m.id && (!isFiniteNumber(m.leadTime) || m.leadTime < 0 || Math.floor(m.leadTime) !== m.leadTime)) {
         errors.push(err('INVALID_LEAD_TIME', m.id,
-          '物料「' + m.id + '」提前期非法：必须是 ≥ 0 的整数（当前值：' + JSON.stringify(m.leadTime) + '）。'));
+          '物料「' + m.id + '」提前期非法：必须是 ≥ 0 的整数（当前值：' + JSON.stringify(m.leadTime) + '）。', '', tm));
       }
     });
 
     // 库存
-    data.inventories.forEach(function (s) {
+    data.inventories.forEach(function (s, i) {
+      var ts = { kind: 'inventories', index: i };
       if (!Object.prototype.hasOwnProperty.call(matSet, s.material)) {
         errors.push(err('MISSING_MATERIAL', s.material,
-          '库存引用了不存在的物料「' + s.material + '」，请先在物料中建档或修正引用。'));
+          '库存表第 ' + (i + 1) + ' 行引用了不存在的物料「' + s.material + '」，请先在物料中建档或修正引用。', '', ts));
       }
       if (!isFiniteNumber(s.qty) || s.qty <= 0) {
         errors.push(err('INVALID_QTY', s.material,
-          '物料「' + s.material + '」的库存数量非法：必须为大于 0 的数字（当前值：' + JSON.stringify(s.qty) + '）。'));
+          '库存表第 ' + (i + 1) + ' 行（物料「' + s.material + '」）数量非法：必须为大于 0 的数字（当前值：' + JSON.stringify(s.qty) + '）。', '', ts));
       }
       if (!isValidISODate(s.date)) {
         errors.push(err('INVALID_DATE', s.material,
-          '物料「' + s.material + '」的库存可用日期非法：' + s.date + '（应为 YYYY-MM-DD）。'));
+          '库存表第 ' + (i + 1) + ' 行（物料「' + s.material + '」）的可用日期非法：' + s.date + '（应为 YYYY-MM-DD）。', '', ts));
       }
     });
 
     // 成品订单
-    data.orders.forEach(function (o) {
-      if (!o.id) errors.push(err('EMPTY_ORDER_ID', '', '存在编号为空的成品订单。'));
+    data.orders.forEach(function (o, i) {
+      var to = { kind: 'orders', index: i };
+      if (!o.id) errors.push(err('EMPTY_ORDER_ID', '', '成品订单第 ' + (i + 1) + ' 行编号为空。', '', to));
       if (!Object.prototype.hasOwnProperty.call(matSet, o.material)) {
         errors.push(err('MISSING_MATERIAL', o.material,
-          '成品订单「' + (o.id || '(未编号)') + '」引用了不存在的物料「' + o.material + '」。'));
+          '成品订单第 ' + (i + 1) + ' 行「' + (o.id || '(未编号)') + '」引用了不存在的物料「' + o.material + '」。', '', to));
       }
       if (!isFiniteNumber(o.qty) || o.qty <= 0) {
         errors.push(err('INVALID_QTY', o.material,
-          '成品订单「' + (o.id || '(未编号)') + '」数量非法：必须为大于 0 的数字（当前值：' + JSON.stringify(o.qty) + '）。'));
+          '成品订单第 ' + (i + 1) + ' 行「' + (o.id || '(未编号)') + '」数量非法：必须为大于 0 的数字（当前值：' + JSON.stringify(o.qty) + '）。', '', to));
       }
       if (!isValidISODate(o.dueDate)) {
         errors.push(err('INVALID_DATE', o.material,
-          '成品订单「' + (o.id || '(未编号)') + '」交货日期非法：' + o.dueDate + '（应为 YYYY-MM-DD）。'));
+          '成品订单第 ' + (i + 1) + ' 行「' + (o.id || '(未编号)') + '」交货日期非法：' + o.dueDate + '（应为 YYYY-MM-DD）。', '', to));
       }
     });
 
     // BOM
     var edgeMap = Object.create(null);
     data.boms.forEach(function (b, i) {
+      var tb = { kind: 'boms', index: i };
       var where = 'BOM 第 ' + (i + 1) + ' 行（' + b.parent + ' → ' + b.child + '）';
       if (!b.parent || !b.child) {
         errors.push(err('EMPTY_BOM_NODE', b.parent || b.child,
-          where + '：父件或子件编码为空。'));
+          where + '：父件或子件编码为空。', '', tb));
         return;
       }
       if (!Object.prototype.hasOwnProperty.call(matSet, b.parent)) {
-        errors.push(err('MISSING_MATERIAL', b.parent, where + '：父件物料「' + b.parent + '」不存在。'));
+        errors.push(err('MISSING_MATERIAL', b.parent, where + '：父件物料「' + b.parent + '」不存在。', '', tb));
       }
       if (!Object.prototype.hasOwnProperty.call(matSet, b.child)) {
-        errors.push(err('MISSING_MATERIAL', b.child, where + '：子件物料「' + b.child + '」不存在。'));
+        errors.push(err('MISSING_MATERIAL', b.child, where + '：子件物料「' + b.child + '」不存在。', '', tb));
       }
       if (b.parent === b.child) {
         errors.push(err('CYCLE', b.parent,
-          '物料「' + b.parent + '」在 BOM 中引用自身，构成循环依赖。'));
+          '物料「' + b.parent + '」在 BOM 第 ' + (i + 1) + ' 行引用自身，构成循环依赖。', '', tb));
       }
       if (!isFiniteNumber(b.qtyPer) || b.qtyPer <= 0) {
         errors.push(err('INVALID_QTY', b.child,
-          where + '：单位用量非法，必须为大于 0 的数字（当前值：' + JSON.stringify(b.qtyPer) + '）。'));
+          where + '：单位用量非法，必须为大于 0 的数字（当前值：' + JSON.stringify(b.qtyPer) + '）。', '', tb));
       }
       if (!isFiniteNumber(b.scrapRate) || b.scrapRate < 0 || b.scrapRate >= 1) {
         errors.push(err('INVALID_SCRAP', b.child,
-          where + '：损耗率非法，必须满足 0 ≤ 损耗率 < 1（当前值：' + JSON.stringify(b.scrapRate) + '）。'));
+          where + '：损耗率非法，必须满足 0 ≤ 损耗率 < 1（当前值：' + JSON.stringify(b.scrapRate) + '）。', '', tb));
       }
       var key = b.parent + '' + b.child;
       if (Object.prototype.hasOwnProperty.call(edgeMap, key)) {
         errors.push(err('DUPLICATE_BOM', b.parent,
-          '重复父子关系：「' + b.parent + ' → ' + b.child + '」在 BOM 中出现多次（同一父子关系只允许一条，数量请合并）。'));
+          '重复父子关系：「' + b.parent + ' → ' + b.child + '」在 BOM 中出现多次（第 ' +
+          (edgeMap[key] + 1) + ' 行与第 ' + (i + 1) + ' 行），同一父子关系只允许一条，数量请合并。', '',
+          [{ kind: 'boms', index: edgeMap[key] }, tb]));
       } else {
-        edgeMap[key] = true;
+        edgeMap[key] = i;
       }
     });
 
@@ -181,8 +191,16 @@
         (graph[b.parent] = graph[b.parent] || []).push(b.child);
       });
       findCycles(graph).forEach(function (chain) {
+        // 用环上的边（chain 相邻节点）定位具体 BOM 行
+        var edgeIndex = Object.create(null);
+        data.boms.forEach(function (b, bi) { edgeIndex[b.parent + '→' + b.child] = bi; });
+        var targets = [];
+        for (var ci = 0; ci < chain.length - 1; ci++) {
+          var ei = edgeIndex[chain[ci] + '→' + chain[ci + 1]];
+          if (ei != null) targets.push({ kind: 'boms', index: ei });
+        }
         errors.push(err('CYCLE', chain[0],
-          'BOM 存在循环依赖：' + chain.join(' → ') + '，无法分层展开。'));
+          'BOM 存在循环依赖：' + chain.join(' → ') + '，无法分层展开。', '', targets));
       });
     }
 

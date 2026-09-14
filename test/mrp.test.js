@@ -281,6 +281,58 @@ test('非法日期被阻断', () => {
   assert.ok(r.errors.some(e => e.code === 'INVALID_DATE'));
 });
 
+test('targets 精确到行：同物料两条库存/订单，只有非法那一行被定位', () => {
+  const d = {
+    materials: [{ id: 'X', leadTime: 1 }],
+    inventories: [
+      { material: 'X', qty: 10, date: days(1) },   // 合法
+      { material: 'X', qty: -2, date: days(1) }    // 非法
+    ],
+    orders: [
+      { id: 'O1', material: 'X', qty: 5, dueDate: days(3) },  // 合法
+      { id: 'O2', material: 'X', qty: 0, dueDate: days(3) }   // 非法
+    ],
+    boms: []
+  };
+  const r = MRP.runPlan(d, TODAY);
+  const invErr = r.errors.filter(e => e.code === 'INVALID_QTY' && e.targets[0].kind === 'inventories');
+  assert.strictEqual(invErr.length, 1);
+  assert.strictEqual(invErr[0].targets[0].index, 1, '应只指向库存第 2 行');
+  const ordErr = r.errors.filter(e => e.code === 'INVALID_QTY' && e.targets[0].kind === 'orders');
+  assert.strictEqual(ordErr.length, 1);
+  assert.strictEqual(ordErr[0].targets[0].index, 1, '应只指向订单第 2 行');
+});
+
+test('targets 精确到行：重复父子只标这两行，循环依赖只标环上的边', () => {
+  const d = {
+    materials: [{ id: 'A', leadTime: 1 }, { id: 'B', leadTime: 1 }, { id: 'C', leadTime: 1 }],
+    inventories: [],
+    orders: [{ id: 'O1', material: 'A', qty: 1, dueDate: days(5) }],
+    boms: [
+      { parent: 'A', child: 'B', qtyPer: 1, scrapRate: 0 },
+      { parent: 'B', child: 'C', qtyPer: 1, scrapRate: 0 },
+      { parent: 'C', child: 'A', qtyPer: 1, scrapRate: 0 }
+    ]
+  };
+  let r = MRP.runPlan(d, TODAY);
+  const cyc = r.errors.filter(e => e.code === 'CYCLE');
+  assert.strictEqual(cyc.length, 1);
+  assert.deepStrictEqual(cyc[0].targets.map(t => t.index).sort(), [0, 1, 2]);
+  // 再加一条重复边（此时环存在也会报；单独验证 DUPLICATE_BOM 的 targets）
+  const d2 = {
+    materials: [{ id: 'A', leadTime: 1 }, { id: 'B', leadTime: 1 }],
+    inventories: [], orders: [{ id: 'O1', material: 'A', qty: 1, dueDate: days(5) }],
+    boms: [
+      { parent: 'A', child: 'B', qtyPer: 1, scrapRate: 0 },
+      { parent: 'A', child: 'B', qtyPer: 2, scrapRate: 0 }
+    ]
+  };
+  r = MRP.runPlan(d2, TODAY);
+  const dup = r.errors.filter(e => e.code === 'DUPLICATE_BOM');
+  assert.strictEqual(dup.length, 1);
+  assert.deepStrictEqual(dup[0].targets.map(t => t.index), [0, 1]);
+});
+
 console.log('\n[4] 排期与缺口');
 
 test('投产日期晚于今天的件不算缺口；倒排后必须今天前投产的件进入缺料清单', () => {

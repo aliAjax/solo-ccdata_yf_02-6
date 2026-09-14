@@ -27,9 +27,20 @@
 ## 运行测试
 
 ```bash
-node test/mrp.test.js
-node test/ui.test.js     # 需安装 jsdom：npm i jsdom（仅测试依赖）
+npm install                          # 从项目目录安装测试依赖（jsdom / playwright）
+npx playwright install chromium      # 下载 Playwright 浏览器（仅界面/窄屏测试需要）
+npm test                             # 依次跑引擎、界面、窄屏全部测试
 ```
+
+也可以单独运行：
+
+```bash
+npm run test:engine   # node test/mrp.test.js
+npm run test:ui       # node test/ui.test.js（jsdom 端到端）
+npm run test:mobile   # node test/mobile.test.js（Playwright：375px 移动 + 1280px 桌面）
+```
+
+窄屏核对包含：375px 下四个维护页与结果区均无页面级横向滚动（宽表仅在容器内横向滚动）、可正常新增/编辑；非法数量只标红出错那一行，同物料的其它有效记录不受影响。
 
 ## 已核对场景
 
