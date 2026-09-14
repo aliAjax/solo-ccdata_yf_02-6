@@ -8,6 +8,10 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+// prepareEnv 会把 Chromium 缺失的运行库自动补到项目内并配置好路径，
+// 因此在最小化容器中也可直接启动浏览器，无需手工设置 LD_LIBRARY_PATH。
+const browserEnv = require('../scripts/browser-libs').prepareEnv();
+Object.assign(process.env, browserEnv);
 const { chromium } = require('playwright');
 
 const root = path.join(__dirname, '..');

@@ -27,12 +27,19 @@
 ## 运行测试
 
 ```bash
-npm install                          # 从项目目录安装测试依赖（jsdom / playwright）
-npx playwright install chromium      # 下载 Playwright 浏览器（仅界面/窄屏测试需要）
-npm test                             # 依次跑引擎、界面、窄屏全部测试
+npm install      # 自动安装依赖、Playwright Chromium，并在最小化容器里补齐浏览器运行库
+npm test         # 依次跑引擎、界面、窄屏/桌面全部测试
 ```
 
-也可以单独运行：
+无需 root、无需手工设置 `LD_LIBRARY_PATH` 等环境变量：
+
+- Chromium 安装在项目内 `node_modules/.playwright`，不依赖用户主目录缓存；
+- `scripts/browser-libs.js`（postinstall）用 `ldd` 检测浏览器缺失的运行库，从与系统匹配的
+  Debian 仓库下载对应 `.deb` 解包到 `node_modules/.chromium-libs`，窄屏测试启动时自动加载；
+  运行库齐全的普通开发机上为空操作；
+- 即使跳过了 postinstall（如 `npm install --ignore-scripts`），运行窄屏测试时也会自动重试补齐。
+
+单独运行：
 
 ```bash
 npm run test:engine   # node test/mrp.test.js
